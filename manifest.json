@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "X Gruvbox Theme",
+  "version": "0.1.0",
+  "description": "x.comの配色をGruvbox Light/Dark Mediumに置き換えます。OSのライト/ダーク設定に連動します。",
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["src/content.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

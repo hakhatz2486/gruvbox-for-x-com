@@ -128,10 +128,37 @@
     Object.entries(roles)
       .map(([name, value]) => `--xgb-r-${name}: ${value};`)
       .join(" ");
+
+  // チャット画面はshadcn/ui流に「204 88% 53%」のような色相・彩度・明度の数値だけを変数に入れ、使う側でhsl(var(--chat-accent))のように包む。
+  // この変数に色そのものを入れるとhsl()の引数として無効になるため、役割の色を同じ数値の形に換算した変数--xgb-hr-*を別に用意する。
+  // color-mix()は数値の形にできないので、ROLESの値をここで計算して確定させる。
+  const parseHexColor = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const mixRgb = (a, b, ratio) => a.map((v, i) => Math.round(v * ratio + b[i] * (1 - ratio)));
+  function roleRgb(value) {
+    const mix = /^color-mix\(in srgb, (#[0-9a-f]{6}) ([\d.]+)%, (#[0-9a-f]{6})\)$/.exec(value);
+    return mix ? mixRgb(parseHexColor(mix[1]), parseHexColor(mix[3]), Number(mix[2]) / 100) : parseHexColor(value);
+  }
+  function hslChannels(rgb) {
+    const { hue, lightness, chroma } = analyze(rgb);
+    const saturation = chroma === 0 ? 0 : chroma / (1 - Math.abs(2 * lightness - 1));
+    const round = (v) => Math.round(v * 10) / 10;
+    return `${round(hue)} ${round(saturation * 100)}% ${round(lightness * 100)}%`;
+  }
+  // roleValueの色付き背景(役割の色を背景に18%混ぜたもの)も数値の形で用意する。
+  const channelDecls = (roles) => {
+    const bg = roleRgb(roles.bg);
+    return Object.entries(roles)
+      .map(([name, value]) => {
+        const rgb = roleRgb(value);
+        return `--xgb-hr-${name}: ${hslChannels(rgb)}; --xgb-hr-${name}-tint: ${hslChannels(mixRgb(rgb, bg, 0.18))};`;
+      })
+      .join(" ");
+  };
+
   // Xがhtml要素のインラインstyleでcolor-schemeを指定するため、スクロールバーやフォーム部品の配色を合わせるには!importantで上書きする必要がある。
   ownStyle.textContent =
-    `:root { color-scheme: light !important; ${roleDecls(ROLES.light)} }\n` +
-    `@media (prefers-color-scheme: dark) { :root { color-scheme: dark !important; ${roleDecls(ROLES.dark)} } }`;
+    `:root { color-scheme: light !important; ${roleDecls(ROLES.light)} ${channelDecls(ROLES.light)} }\n` +
+    `@media (prefers-color-scheme: dark) { :root { color-scheme: dark !important; ${roleDecls(ROLES.dark)} ${channelDecls(ROLES.dark)} } }`;
   // document_start時点ではheadがまだ無いため、html要素の直下に置く。
   root.appendChild(ownStyle);
   const ownSheet = ownStyle.sheet;
@@ -173,21 +200,36 @@
     return "purple";
   }
 
-  function roleValue(hex, rgb, sourceName) {
+  function roleOf(hex, rgb, sourceName) {
     const override = OVERRIDES[hex]?.[sourceName];
-    if (override) return `var(--xgb-r-${override})`;
+    if (override) return { role: override, tint: false };
     const { hue, lightness, chroma } = analyze(rgb);
     if (chroma < NEUTRAL_CHROMA) {
       let best = NEUTRAL_ANCHORS[sourceName][0];
       for (const anchor of NEUTRAL_ANCHORS[sourceName]) {
         if (Math.abs(anchor[0] - lightness) < Math.abs(best[0] - lightness)) best = anchor;
       }
-      return `var(--xgb-r-${best[1]})`;
+      return { role: best[1], tint: false };
     }
-    const role = hueRole(hue);
     // 背景に近い明度の有彩色はエラー表示の薄い赤背景などの「色付き背景」なので、アクセント色そのものにすると文字が読めなくなる。
-    const isTint = sourceName === "light" ? lightness > 0.88 : lightness < 0.2;
-    return isTint ? `color-mix(in srgb, var(--xgb-r-${role}) 18%, var(--xgb-r-bg))` : `var(--xgb-r-${role})`;
+    const tint = sourceName === "light" ? lightness > 0.88 : lightness < 0.2;
+    return { role: hueRole(hue), tint };
+  }
+
+  function roleValue(hex, rgb, sourceName) {
+    const { role, tint } = roleOf(hex, rgb, sourceName);
+    return tint ? `color-mix(in srgb, var(--xgb-r-${role}) 18%, var(--xgb-r-bg))` : `var(--xgb-r-${role})`;
+  }
+
+  const definedChannels = new Set();
+
+  function defineChannels(hex, rgb) {
+    if (definedChannels.has(hex)) return;
+    definedChannels.add(hex);
+    for (const [name, rule] of Object.entries(sourceRules)) {
+      const { role, tint } = roleOf(hex, rgb, name);
+      rule.style.setProperty(`--xgb-h-${hex}`, `var(--xgb-hr-${role}${tint ? "-tint" : ""})`);
+    }
   }
 
   function define(hex, rgb) {
@@ -242,10 +284,34 @@
     return changed ? result : null;
   }
 
+  const HSL_CHANNELS_RE = /^\s*(-?[\d.]+)(?:deg)?\s+([\d.]+)%\s+([\d.]+)%\s*$/;
+
+  function hslToRgb(hue, saturation, lightness) {
+    const h = ((hue % 360) + 360) % 360;
+    const a = saturation * Math.min(lightness, 1 - lightness);
+    const f = (n) => {
+      const k = (n + h / 30) % 12;
+      return lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    };
+    return [f(0), f(8), f(4)].map((v) => Math.round(v * 255));
+  }
+
+  // 数値の形の値はカスタムプロパティにしか現れないので、呼び出し側でカスタムプロパティに限って渡す。
+  // 差し替え後の値は正規表現に一致しなくなるため、再走査で二重に書き換えることはない。
+  function rewriteChannels(value) {
+    const match = HSL_CHANNELS_RE.exec(value);
+    if (!match) return null;
+    const rgb = hslToRgb(Number(match[1]), Number(match[2]) / 100, Number(match[3]) / 100);
+    const hex = toHex(rgb);
+    defineChannels(hex, rgb);
+    return `var(--xgb-h-${hex}, ${value.trim()})`;
+  }
+
   function rewriteDeclaration(style) {
     for (let i = 0; i < style.length; i++) {
       const property = style[i];
-      const next = rewriteValue(style.getPropertyValue(property));
+      const value = style.getPropertyValue(property);
+      const next = (property.startsWith("--") && rewriteChannels(value)) || rewriteValue(value);
       if (next) style.setProperty(property, next, style.getPropertyPriority(property));
     }
   }

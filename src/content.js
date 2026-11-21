@@ -108,10 +108,11 @@
   const NOTIFICATION_MARK_SELECTOR = 'article[data-testid="notification"] > div > div > svg';
   const NOTIFICATION_MARK_THEMED = new Set(["1d9bf0"]);
 
-  // 動画プレイヤーの操作部分は、テーマの背景ではなく動画の上に黒い半透明のグラデーションを敷いて白いアイコンを載せている。
-  // ダーク系モードの#ffffffは背景色に割り当てるため、テーマ色のままだと黒い下地の上に暗いアイコンが並んで見えなくなる。
-  // 下地が動画である以上テーマに合わせる意味が薄いので、プレイヤー内は無彩色も含めすべてXの元の色に戻す。
-  const VIDEO_PLAYER_SELECTOR = '[data-testid="videoPlayer"]';
+  // 動画プレイヤーの操作部分と、投稿画面で添付した画像の上の「編集」「削除」ボタンは、テーマの背景ではなく画像・動画の上に黒い半透明の下地を敷いて白い文字やアイコンを載せている。
+  // ダーク系モードでは#ffffffも#0f1419も背景色に割り当てるため、テーマ色のままだと下地と文字が同じ暗い色になって読めなくなる。
+  // 下地が画像・動画である以上テーマに合わせる意味が薄いので、これらの中は無彩色も含めすべてXの元の色に戻す。
+  // 添付欄(attachments)の中でも、画像の下の「タグ付けする」等のリンクはテーマの背景の上にあるため、button要素だけに限っている。
+  const ON_MEDIA_SELECTOR = ':is([data-testid="videoPlayer"], [data-testid="attachments"] button)';
 
   const STORAGE_KEY = "xgb-source";
 
@@ -177,7 +178,7 @@
   // ボタン要素自身に変数を定義すれば、html要素で定義した値より優先して子孫に継承される。
   const keepOriginalRule = ownSheet.cssRules[ownSheet.insertRule(`${KEEP_ORIGINAL_SELECTOR} {}`, ownSheet.cssRules.length)];
   const notificationMarkRule = ownSheet.cssRules[ownSheet.insertRule(`${NOTIFICATION_MARK_SELECTOR} {}`, ownSheet.cssRules.length)];
-  const videoPlayerRule = ownSheet.cssRules[ownSheet.insertRule(`${VIDEO_PLAYER_SELECTOR} {}`, ownSheet.cssRules.length)];
+  const onMediaRule = ownSheet.cssRules[ownSheet.insertRule(`${ON_MEDIA_SELECTOR} {}`, ownSheet.cssRules.length)];
   const defined = new Set();
 
   function analyze([r, g, b]) {
@@ -244,7 +245,7 @@
     for (const [name, rule] of Object.entries(sourceRules)) {
       rule.style.setProperty(`--xgb-c-${hex}`, roleValue(hex, rgb, name));
     }
-    videoPlayerRule.style.setProperty(`--xgb-c-${hex}`, `#${hex}`);
+    onMediaRule.style.setProperty(`--xgb-c-${hex}`, `#${hex}`);
     // 灰色のアイコンや文字まで元に戻すとGruvboxの背景上で浮くため、有彩色だけを戻す。
     if (analyze(rgb).chroma >= NEUTRAL_CHROMA) {
       keepOriginalRule.style.setProperty(`--xgb-c-${hex}`, `#${hex}`);

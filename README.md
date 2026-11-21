@@ -1,4 +1,4 @@
-# X Gruvbox Theme
+# Gruvbox for x.com
 
 x.comの配色をGruvbox Light/Dark Mediumに置き換えるChrome拡張です。配色は[hakhatz.dev](https://hakhatz.dev)と揃えており、OSのライト/ダーク設定に連動します。
 

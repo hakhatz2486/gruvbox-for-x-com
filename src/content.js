@@ -108,6 +108,11 @@
   const NOTIFICATION_MARK_SELECTOR = 'article[data-testid="notification"] > div > div > svg';
   const NOTIFICATION_MARK_THEMED = new Set(["1d9bf0"]);
 
+  // 動画プレイヤーの操作部分は、テーマの背景ではなく動画の上に黒い半透明のグラデーションを敷いて白いアイコンを載せている。
+  // ダーク系モードの#ffffffは背景色に割り当てるため、テーマ色のままだと黒い下地の上に暗いアイコンが並んで見えなくなる。
+  // 下地が動画である以上テーマに合わせる意味が薄いので、プレイヤー内は無彩色も含めすべてXの元の色に戻す。
+  const VIDEO_PLAYER_SELECTOR = '[data-testid="videoPlayer"]';
+
   const STORAGE_KEY = "xgb-source";
 
   const root = document.documentElement;
@@ -172,6 +177,7 @@
   // ボタン要素自身に変数を定義すれば、html要素で定義した値より優先して子孫に継承される。
   const keepOriginalRule = ownSheet.cssRules[ownSheet.insertRule(`${KEEP_ORIGINAL_SELECTOR} {}`, ownSheet.cssRules.length)];
   const notificationMarkRule = ownSheet.cssRules[ownSheet.insertRule(`${NOTIFICATION_MARK_SELECTOR} {}`, ownSheet.cssRules.length)];
+  const videoPlayerRule = ownSheet.cssRules[ownSheet.insertRule(`${VIDEO_PLAYER_SELECTOR} {}`, ownSheet.cssRules.length)];
   const defined = new Set();
 
   function analyze([r, g, b]) {
@@ -238,6 +244,7 @@
     for (const [name, rule] of Object.entries(sourceRules)) {
       rule.style.setProperty(`--xgb-c-${hex}`, roleValue(hex, rgb, name));
     }
+    videoPlayerRule.style.setProperty(`--xgb-c-${hex}`, `#${hex}`);
     // 灰色のアイコンや文字まで元に戻すとGruvboxの背景上で浮くため、有彩色だけを戻す。
     if (analyze(rgb).chroma >= NEUTRAL_CHROMA) {
       keepOriginalRule.style.setProperty(`--xgb-c-${hex}`, `#${hex}`);

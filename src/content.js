@@ -289,11 +289,38 @@
     rewriteDeclaration(element.style);
   }
 
+  // 投稿画面の文字数カウンターの円などは、SVGの提示属性(stroke="#1D9BF0"等)に色を直接書いている。
+  // 提示属性はvar()を受け付けないため、属性はそのまま残し、優先度の高いインラインstyleに書き換えた色を入れる。
+  // カウンターは残り文字数に応じて属性の色を変えるので、属性が変わるたびに作り直し、色でなくなった場合は自分で入れたstyleだけを外す。
+  const SVG_COLOR_ATTRIBUTES = ["fill", "stroke", "stop-color", "flood-color", "lighting-color"];
+  const SVG_COLOR_SELECTOR = SVG_COLOR_ATTRIBUTES.map((name) => `[${name}]`).join(", ");
+  const svgOverrides = new WeakMap();
+
+  function rewriteSvgAttributes(element) {
+    if (!(element instanceof SVGElement)) return;
+    let overridden = svgOverrides.get(element);
+    for (const name of SVG_COLOR_ATTRIBUTES) {
+      const next = rewriteValue(element.getAttribute(name));
+      if (next) {
+        element.style.setProperty(name, next);
+        if (!overridden) svgOverrides.set(element, (overridden = new Set()));
+        overridden.add(name);
+      } else if (overridden?.has(name)) {
+        element.style.removeProperty(name);
+        overridden.delete(name);
+      }
+    }
+  }
+
   // nodeにはShadowRootも渡るが、ShadowRootは属性を持たないのでrewriteElementに渡さない。
   function rewriteTree(node) {
     if (node.nodeName === "STYLE") rewriteSheet(node.sheet);
-    if (node.nodeType === Node.ELEMENT_NODE) rewriteElement(node);
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      rewriteElement(node);
+      rewriteSvgAttributes(node);
+    }
     for (const element of node.querySelectorAll("[style]")) rewriteElement(element);
+    for (const element of node.querySelectorAll(SVG_COLOR_SELECTOR)) rewriteSvgAttributes(element);
     for (const style of node.querySelectorAll("style")) rewriteSheet(style.sheet);
   }
 
@@ -351,7 +378,12 @@
     requestAnimationFrame(rescanSheets);
   }
 
-  const OBSERVE_OPTIONS = { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] };
+  const OBSERVE_OPTIONS = {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["style", ...SVG_COLOR_ATTRIBUTES],
+  };
 
   const observer = new MutationObserver((records) => {
     scheduleRescan();
@@ -359,7 +391,8 @@
       const recordRoot = record.target.getRootNode();
       if (recordRoot instanceof ShadowRoot) shadowRoots.add(recordRoot);
       if (record.type === "attributes") {
-        rewriteElement(record.target);
+        if (record.attributeName === "style") rewriteElement(record.target);
+        else rewriteSvgAttributes(record.target);
         continue;
       }
       // style要素の中身(テキストノード)が差し替えられた場合は、要素自体が追加されなくてもシートが作り直される。

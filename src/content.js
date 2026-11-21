@@ -250,9 +250,46 @@
     }
   }
 
+  // チャット画面はデザイントークンで色を指定し、ダークテーマでは本文・枠線・ボタンなど前景全般に--x-white(#ffffff)を使う。
+  // 一方で送信した吹き出しの文字(text-white)や--x-fg-on-colorのように、青などの有彩色の上の文字にも同じ--x-whiteを使うため、OVERRIDESでは両者を区別できず、前景まで背景色になって受信メッセージが読めなくなる。
+  // そこでダークテーマのトークン定義に限り--x-white(-NN)の参照を、白をfgに割り当てた別の変数--xgb-fg-white(-NN)に差し替える。
+  // 透明度付きの--x-white-NNはXの定義をそのまま写して作るため、透明度の値を自前で持たない。
+  const CHAT_DARK_SELECTOR = '[data-theme="dark"]';
+  const CHAT_WHITE_REF_RE = /var\(--x-white(-\d+)?\)/g;
+  const CHAT_WHITE_DEF_RE = /^--x-white(-\d+)?$/;
+  const CHAT_ON_COLOR_TOKENS = new Set(["--x-fg-on-color"]);
+
+  function rewriteChatTokens(rule) {
+    const { style, selectorText } = rule;
+    if (!selectorText) return;
+    const isDark = selectorText.includes(CHAT_DARK_SELECTOR);
+    const updates = [];
+    for (let i = 0; i < style.length; i++) {
+      const property = style[i];
+      const value = style.getPropertyValue(property);
+      const def = CHAT_WHITE_DEF_RE.exec(property);
+      if (def) {
+        const next = value.replaceAll("var(--xgb-c-ffffff, #ffffff)", "var(--xgb-r-fg)");
+        const name = `--xgb-fg-white${def[1] ?? ""}`;
+        if (next !== value && style.getPropertyValue(name) !== next) updates.push([name, next]);
+        continue;
+      }
+      if (!isDark || !property.startsWith("--x-") || CHAT_ON_COLOR_TOKENS.has(property)) continue;
+      // 差し替え後もフォールバックに--x-whiteが残るので、再走査で二重に包まないよう差し替え済みの値は飛ばす。
+      if (value.includes("--xgb-fg-white")) continue;
+      const next = value.replace(CHAT_WHITE_REF_RE, (match, alpha = "") => `var(--xgb-fg-white${alpha}, ${match})`);
+      if (next !== value) updates.push([property, next, style.getPropertyPriority(property)]);
+    }
+    // 走査中にプロパティを追加すると添字がずれるため、まとめて適用する。
+    for (const [property, value, priority = ""] of updates) style.setProperty(property, value, priority);
+  }
+
   function rewriteRules(rules) {
     for (const rule of rules) {
-      if (rule.style) rewriteDeclaration(rule.style);
+      if (rule.style) {
+        rewriteDeclaration(rule.style);
+        rewriteChatTokens(rule);
+      }
       if (rule.cssRules) rewriteRules(rule.cssRules);
     }
   }

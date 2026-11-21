@@ -99,10 +99,14 @@
 
   // いいね・リポスト・ブックマークは押したかどうかがXのピンク・緑・青で一目で分かることを優先し、ボタン内の有彩色だけ元の色に戻す。
   // 押す前後でdata-testidが切り替わる(like→unlike、retweet→unretweet、bookmark→removeBookmark)ため両方を指定する。
-  // 通知ページの各通知の左にあるマーク(いいね、リポスト、フォロー等)も、通知の種類を色で見分けられるよう元の色に戻す。
-  // このマークにはdata-testidが無いため、通知1件ごとに1つだけ存在する「article直下の2階層下のsvg」という位置で特定している。
   const KEEP_ORIGINAL_SELECTOR =
-    ':is([data-testid="like"], [data-testid="unlike"], [data-testid="retweet"], [data-testid="unretweet"], [data-testid="bookmark"], [data-testid="removeBookmark"], article[data-testid="notification"] > div > div > svg)';
+    ':is([data-testid="like"], [data-testid="unlike"], [data-testid="retweet"], [data-testid="unretweet"], [data-testid="bookmark"], [data-testid="removeBookmark"])';
+
+  // 通知ページの各通知の左にあるマークも、いいねやリポストの通知を色で見分けられるよう元の色に戻す。
+  // ただしXの青で描かれるマーク(フォローの人型、通知のベル)はユーザーの希望でテーマの青のままにするため、青だけは戻す対象から外す。
+  // このマークにはdata-testidが無いため、通知1件ごとに1つだけ存在する「article直下の2階層下のsvg」という位置で特定している。
+  const NOTIFICATION_MARK_SELECTOR = 'article[data-testid="notification"] > div > div > svg';
+  const NOTIFICATION_MARK_THEMED = new Set(["1d9bf0"]);
 
   const STORAGE_KEY = "xgb-source";
 
@@ -140,6 +144,7 @@
   }
   // ボタン要素自身に変数を定義すれば、html要素で定義した値より優先して子孫に継承される。
   const keepOriginalRule = ownSheet.cssRules[ownSheet.insertRule(`${KEEP_ORIGINAL_SELECTOR} {}`, ownSheet.cssRules.length)];
+  const notificationMarkRule = ownSheet.cssRules[ownSheet.insertRule(`${NOTIFICATION_MARK_SELECTOR} {}`, ownSheet.cssRules.length)];
   const defined = new Set();
 
   function analyze([r, g, b]) {
@@ -192,7 +197,10 @@
       rule.style.setProperty(`--xgb-c-${hex}`, roleValue(hex, rgb, name));
     }
     // 灰色のアイコンや文字まで元に戻すとGruvboxの背景上で浮くため、有彩色だけを戻す。
-    if (analyze(rgb).chroma >= NEUTRAL_CHROMA) keepOriginalRule.style.setProperty(`--xgb-c-${hex}`, `#${hex}`);
+    if (analyze(rgb).chroma >= NEUTRAL_CHROMA) {
+      keepOriginalRule.style.setProperty(`--xgb-c-${hex}`, `#${hex}`);
+      if (!NOTIFICATION_MARK_THEMED.has(hex)) notificationMarkRule.style.setProperty(`--xgb-c-${hex}`, `#${hex}`);
+    }
   }
 
   const COLOR_RE =

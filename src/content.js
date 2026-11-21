@@ -99,8 +99,10 @@
 
   // いいね・リポスト・ブックマークは押したかどうかがXのピンク・緑・青で一目で分かることを優先し、ボタン内の有彩色だけ元の色に戻す。
   // 押す前後でdata-testidが切り替わる(like→unlike、retweet→unretweet、bookmark→removeBookmark)ため両方を指定する。
+  // 通知ページの各通知の左にあるマーク(いいね、リポスト、フォロー等)も、通知の種類を色で見分けられるよう元の色に戻す。
+  // このマークにはdata-testidが無いため、通知1件ごとに1つだけ存在する「article直下の2階層下のsvg」という位置で特定している。
   const KEEP_ORIGINAL_SELECTOR =
-    ':is([data-testid="like"], [data-testid="unlike"], [data-testid="retweet"], [data-testid="unretweet"], [data-testid="bookmark"], [data-testid="removeBookmark"])';
+    ':is([data-testid="like"], [data-testid="unlike"], [data-testid="retweet"], [data-testid="unretweet"], [data-testid="bookmark"], [data-testid="removeBookmark"], article[data-testid="notification"] > div > div > svg)';
 
   const STORAGE_KEY = "xgb-source";
 
@@ -194,7 +196,7 @@
   }
 
   const COLOR_RE =
-    /#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b|rgba?\(\s*(\d{1,3})\s*,?\s*(\d{1,3})\s*,?\s*(\d{1,3})\s*(?:[,/]\s*([\d.]+)(%?))?\s*\)/gi;
+    /#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b|rgba?\(\s*(\d{1,3})\s*,?\s*(\d{1,3})\s*,?\s*(\d{1,3})\s*(?:[,/]\s*(?:([\d.]+)(%?)|(var\(--[\w-]+(?:\s*,\s*[\d.]+)?\))))?\s*\)/gi;
 
   function parseHex(digits) {
     const full = digits.length <= 4 ? [...digits].map((c) => c + c).join("") : digits;
@@ -210,7 +212,7 @@
   function rewriteValue(value) {
     if (!value || value.includes("--xgb-") || /url\(/i.test(value)) return null;
     let changed = false;
-    const result = value.replace(COLOR_RE, (match, hexDigits, r, g, b, a, percent) => {
+    const result = value.replace(COLOR_RE, (match, hexDigits, r, g, b, a, percent, alphaVar) => {
       let rgb;
       let alpha = 1;
       if (hexDigits) {
@@ -224,6 +226,8 @@
       define(hex, rgb);
       changed = true;
       const ref = `var(--xgb-c-${hex}, #${hex})`;
+      // クリエイタースタジオのJetfuel(rgba(255, 255, 255, var(--jbgo)))やTailwind v3(rgb(255 255 255 / var(--tw-bg-opacity, 1)))は透明度を変数で後から切り替えるため、値を確定させずに変数のまま百分率へ変換して渡す。
+      if (alphaVar) return `color-mix(in srgb, ${ref} calc(${alphaVar} * 100%), transparent)`;
       // 半透明の色はホバー時の重ね塗りや影に使われるため、透明度を保ったまま色だけを置き換える。
       return alpha >= 1 ? ref : `color-mix(in srgb, ${ref} ${Math.round(alpha * 1000) / 10}%, transparent)`;
     });
@@ -277,9 +281,10 @@
     rewriteDeclaration(element.style);
   }
 
+  // nodeにはShadowRootも渡るが、ShadowRootは属性を持たないのでrewriteElementに渡さない。
   function rewriteTree(node) {
     if (node.nodeName === "STYLE") rewriteSheet(node.sheet);
-    rewriteElement(node);
+    if (node.nodeType === Node.ELEMENT_NODE) rewriteElement(node);
     for (const element of node.querySelectorAll("[style]")) rewriteElement(element);
     for (const style of node.querySelectorAll("style")) rewriteSheet(style.sheet);
   }
@@ -304,9 +309,22 @@
   const scannedLength = new WeakMap();
   let rescanScheduled = false;
 
+  // チャット画面(x.com/i/chat)はShadow DOM内に描画され、スタイルもShadowRootのadoptedStyleSheetsで指定されるため、documentの監視とシート一覧だけでは届かない。
+  // closedモードのShadowRootはhost.shadowRootから辿れないので、attachShadowを差し替えて作成時に受け取る。
+  const shadowRoots = new Set();
+
   function rescanSheets() {
     rescanScheduled = false;
-    for (const sheet of [...document.styleSheets, ...document.adoptedStyleSheets]) {
+    const sheets = [...document.styleSheets, ...document.adoptedStyleSheets];
+    for (const shadow of shadowRoots) {
+      // 画面遷移で外されたShadowRootを持ち続けないよう一覧から外す。再び接続された場合は、監視が続いているので変化の通知を受けた時点で戻す。
+      if (!shadow.host.isConnected) {
+        shadowRoots.delete(shadow);
+        continue;
+      }
+      sheets.push(...shadow.styleSheets, ...shadow.adoptedStyleSheets);
+    }
+    for (const sheet of sheets) {
       let length;
       try {
         length = sheet.cssRules.length;
@@ -325,9 +343,13 @@
     requestAnimationFrame(rescanSheets);
   }
 
-  new MutationObserver((records) => {
+  const OBSERVE_OPTIONS = { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] };
+
+  const observer = new MutationObserver((records) => {
     scheduleRescan();
     for (const record of records) {
+      const recordRoot = record.target.getRootNode();
+      if (recordRoot instanceof ShadowRoot) shadowRoots.add(recordRoot);
       if (record.type === "attributes") {
         rewriteElement(record.target);
         continue;
@@ -338,7 +360,33 @@
         if (node.nodeType === Node.ELEMENT_NODE) rewriteTree(node);
       }
     }
-  }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
+  });
+
+  function watchShadowRoot(shadow) {
+    if (shadowRoots.has(shadow)) return;
+    shadowRoots.add(shadow);
+    observer.observe(shadow, OBSERVE_OPTIONS);
+    rewriteTree(shadow);
+    scheduleRescan();
+  }
+
+  const originalAttachShadow = Element.prototype.attachShadow;
+  Element.prototype.attachShadow = function (...args) {
+    const shadow = originalAttachShadow.apply(this, args);
+    try {
+      watchShadowRoot(shadow);
+    } catch {
+      // 監視の登録に失敗してもXの描画は止めない。
+    }
+    return shadow;
+  };
+
+  observer.observe(document, OBSERVE_OPTIONS);
+
+  // スクリプトの実行がXより遅れた場合に備え、既に作られているopenモードのShadowRootも拾う。
+  for (const element of document.querySelectorAll("*")) {
+    if (element.shadowRoot) watchShadowRoot(element.shadowRoot);
+  }
 
   rescanSheets();
   rewriteTree(root);

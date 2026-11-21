@@ -298,7 +298,35 @@
     };
   }
 
+  // 2026年11月、ユーザー環境でスーパーリロードすると約9割の頻度で、insertRuleを差し替えていても書き換えられないまま残るルールがあることを確認した。
+  // 差し替えを通らない追加経路は特定できていないため、経路を問わず取りこぼしを拾えるよう、DOMが変化したフレームの描画前にルール数が変わったシートを走査し直す。
+  // Reactは新しいクラスのルールを追加した直後にそのクラスを使う要素を描画するので、DOMの変化を契機にすれば白い状態が画面に出る前に書き換えられる。
+  const scannedLength = new WeakMap();
+  let rescanScheduled = false;
+
+  function rescanSheets() {
+    rescanScheduled = false;
+    for (const sheet of [...document.styleSheets, ...document.adoptedStyleSheets]) {
+      let length;
+      try {
+        length = sheet.cssRules.length;
+      } catch {
+        continue;
+      }
+      if (scannedLength.get(sheet) === length) continue;
+      scannedLength.set(sheet, length);
+      rewriteSheet(sheet);
+    }
+  }
+
+  function scheduleRescan() {
+    if (rescanScheduled) return;
+    rescanScheduled = true;
+    requestAnimationFrame(rescanSheets);
+  }
+
   new MutationObserver((records) => {
+    scheduleRescan();
     for (const record of records) {
       if (record.type === "attributes") {
         rewriteElement(record.target);
@@ -312,6 +340,6 @@
     }
   }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
 
-  for (const sheet of document.styleSheets) rewriteSheet(sheet);
+  rescanSheets();
   rewriteTree(root);
 })();

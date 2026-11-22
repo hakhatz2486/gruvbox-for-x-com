@@ -114,6 +114,11 @@
   // 添付欄(attachments)の中でも、画像の下の「タグ付けする」等のリンクはテーマの背景の上にあるため、button要素だけに限っている。
   const ON_MEDIA_SELECTOR = ':is([data-testid="videoPlayer"], [data-testid="attachments"] button)';
 
+  // ボタンにホバーした時のツールチップは、表示モードによらず濃い灰色(#464646の90%)の下地に白い文字を載せている。
+  // ダーク系モードでは#ffffffを背景色に割り当てる(OVERRIDES参照)ため、下地がbg-2、文字がbgの暗い色同士になって読めなくなる。
+  // 下地は灰色としてテーマ色に置き換わっており画像の上でもないので、元の色には戻さず、文字だけを本文色に割り当て直す。
+  const TOOLTIP_SELECTOR = '[role="tooltip"]';
+
   const STORAGE_KEY = "xgb-source";
 
   const root = document.documentElement;
@@ -179,6 +184,8 @@
   const keepOriginalRule = ownSheet.cssRules[ownSheet.insertRule(`${KEEP_ORIGINAL_SELECTOR} {}`, ownSheet.cssRules.length)];
   const notificationMarkRule = ownSheet.cssRules[ownSheet.insertRule(`${NOTIFICATION_MARK_SELECTOR} {}`, ownSheet.cssRules.length)];
   const onMediaRule = ownSheet.cssRules[ownSheet.insertRule(`${ON_MEDIA_SELECTOR} {}`, ownSheet.cssRules.length)];
+  const whiteAsBgSources = Object.keys(OVERRIDES.ffffff).map((name) => `[data-xgb-source="${name}"]`);
+  ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${TOOLTIP_SELECTOR} { --xgb-c-ffffff: var(--xgb-r-fg); }`, ownSheet.cssRules.length);
   const defined = new Set();
 
   function analyze([r, g, b]) {

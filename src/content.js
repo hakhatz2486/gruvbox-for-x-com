@@ -112,7 +112,11 @@
   // ダーク系モードでは#ffffffも#0f1419も背景色に割り当てるため、テーマ色のままだと下地と文字が同じ暗い色になって読めなくなる。
   // 下地が画像・動画である以上テーマに合わせる意味が薄いので、これらの中は無彩色も含めすべてXの元の色に戻す。
   // 添付欄(attachments)の中でも、画像の下の「タグ付けする」等のリンクはテーマの背景の上にあるため、button要素だけに限っている。
-  const ON_MEDIA_SELECTOR = ':is([data-testid="videoPlayer"], [data-testid="attachments"] button)';
+  // センシティブな内容の警告(「内容の警告: ヌード」と「表示」ボタン)も、ぼかした画像や投稿の上に黒50%の下地を重ねて白い文字を載せているため同じ扱いにする。
+  // この重ね合わせにはdata-testidもroleも無いため、「警告アイコンのsvg・見出し・説明文が並ぶdivと、表示ボタンを持つ要素」という構造で特定している。
+  const SENSITIVE_WARNING_SELECTOR =
+    "div:has(> div:only-child > div:first-child > svg:first-child + div + div:last-child):has(> div:only-child > button:last-child)";
+  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], [data-testid="attachments"] button, ${SENSITIVE_WARNING_SELECTOR})`;
 
   // ボタンにホバーした時のツールチップは、表示モードによらず濃い灰色(#464646の90%)の下地に白い文字を載せている。
   // ダーク系モードでは#ffffffを背景色に割り当てる(OVERRIDES参照)ため、下地がbg-2、文字がbgの暗い色同士になって読めなくなる。

@@ -392,21 +392,33 @@
   const CHAT_WHITE_DEF_RE = /^--x-white(-\d+)?$/;
   const CHAT_ON_COLOR_TOKENS = new Set(["--x-fg-on-color"]);
 
+  // クリエイタースタジオなどJetfuelで描かれる画面も、ダークテーマ用のルール([data-theme="dark"] .jetfuel-style-root ...)では文字色に白を直接書いている。
+  // トークンを介さないので、これらのルールに限り、プロパティを問わず白をfgに差し替える。
+  const JETFUEL_ROOT_SELECTOR = ".jetfuel-style-root";
+
   function rewriteChatTokens(rule) {
     const { style } = rule;
     // Grokの画面ではトークンがネストしたCSSの中にあり、宣言部分がセレクタを持たないCSSNestedDeclarationsになるため、親ルールのセレクタで判定する。
     const selectorText = rule.selectorText ?? rule.parentRule?.selectorText;
     if (!selectorText) return;
     const isDark = selectorText.includes(CHAT_DARK_SELECTOR);
+    const isJetfuelDark = isDark && selectorText.includes(JETFUEL_ROOT_SELECTOR);
     const updates = [];
-    for (let i = 0; i < style.length; i++) {
-      const property = style[i];
+    // var()を含むショートハンドは個別プロパティの値が空文字になるため、rewriteDeclarationと同じくショートハンドも見る。
+    const properties = isJetfuelDark ? [...style, ...COLOR_SHORTHANDS] : style;
+    for (let i = 0; i < properties.length; i++) {
+      const property = properties[i];
       const value = style.getPropertyValue(property);
       const def = CHAT_WHITE_DEF_RE.exec(property);
       if (def) {
         const next = value.replaceAll(CHAT_WHITE_LITERAL, "var(--xgb-r-fg)");
         const name = `--xgb-fg-white${def[1] ?? ""}`;
         if (next !== value && style.getPropertyValue(name) !== next) updates.push([name, next]);
+        continue;
+      }
+      if (isJetfuelDark && !property.startsWith("--x-")) {
+        const next = value.replaceAll(CHAT_WHITE_LITERAL, "var(--xgb-r-fg)");
+        if (next !== value) updates.push([property, next, style.getPropertyPriority(property)]);
         continue;
       }
       if (!isDark || !property.startsWith("--x-") || CHAT_ON_COLOR_TOKENS.has(property)) continue;

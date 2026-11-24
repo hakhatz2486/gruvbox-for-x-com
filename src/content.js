@@ -340,8 +340,11 @@
   // 一方で送信した吹き出しの文字(text-white)や--x-fg-on-colorのように、青などの有彩色の上の文字にも同じ--x-whiteを使うため、OVERRIDESでは両者を区別できず、前景まで背景色になって受信メッセージが読めなくなる。
   // そこでダークテーマのトークン定義に限り--x-white(-NN)の参照を、白をfgに割り当てた別の変数--xgb-fg-white(-NN)に差し替える。
   // 透明度付きの--x-white-NNはXの定義をそのまま写して作るため、透明度の値を自前で持たない。
+  // --x-fg-alpha-NNや--x-border-elevatedは--x-whiteを参照せず白を直接書いているため、書き換え後の白の参照をfgに直接差し替える。
+  // これを漏らすと、例えば共有画面の送信ボタンでアイコンを囲む輪(--x-fg-alpha-100)が、本文色のボタンの上で背景色の黒い輪になる。
   const CHAT_DARK_SELECTOR = '[data-theme="dark"]';
   const CHAT_WHITE_REF_RE = /var\(--x-white(-\d+)?\)/g;
+  const CHAT_WHITE_LITERAL = "var(--xgb-c-ffffff, #ffffff)";
   const CHAT_WHITE_DEF_RE = /^--x-white(-\d+)?$/;
   const CHAT_ON_COLOR_TOKENS = new Set(["--x-fg-on-color"]);
 
@@ -355,7 +358,7 @@
       const value = style.getPropertyValue(property);
       const def = CHAT_WHITE_DEF_RE.exec(property);
       if (def) {
-        const next = value.replaceAll("var(--xgb-c-ffffff, #ffffff)", "var(--xgb-r-fg)");
+        const next = value.replaceAll(CHAT_WHITE_LITERAL, "var(--xgb-r-fg)");
         const name = `--xgb-fg-white${def[1] ?? ""}`;
         if (next !== value && style.getPropertyValue(name) !== next) updates.push([name, next]);
         continue;
@@ -363,7 +366,9 @@
       if (!isDark || !property.startsWith("--x-") || CHAT_ON_COLOR_TOKENS.has(property)) continue;
       // 差し替え後もフォールバックに--x-whiteが残るので、再走査で二重に包まないよう差し替え済みの値は飛ばす。
       if (value.includes("--xgb-fg-white")) continue;
-      const next = value.replace(CHAT_WHITE_REF_RE, (match, alpha = "") => `var(--xgb-fg-white${alpha}, ${match})`);
+      const next = value
+        .replace(CHAT_WHITE_REF_RE, (match, alpha = "") => `var(--xgb-fg-white${alpha}, ${match})`)
+        .replaceAll(CHAT_WHITE_LITERAL, "var(--xgb-r-fg)");
       if (next !== value) updates.push([property, next, style.getPropertyPriority(property)]);
     }
     // 走査中にプロパティを追加すると添字がずれるため、まとめて適用する。
@@ -381,7 +386,7 @@
   }
 
   function rewriteSheet(sheet) {
-    if (!sheet || sheet === ownSheet) return;
+    if (!sheet || sheet === ownSheet || sheet === chatSheet) return;
     try {
       rewriteRules(sheet.cssRules);
     } catch {
@@ -471,6 +476,18 @@
   // closedモードのShadowRootはhost.shadowRootから辿れないので、attachShadowを差し替えて作成時に受け取る。
   const shadowRoots = new Set();
 
+  // 共有画面の送信ボタン(bg-btn-primary)は、宛先のアイコンをfg-alpha-100の輪で囲んでいる。
+  // Xではこの輪がボタンと同じ色で見えないが、Gruvboxダークの本文色のボタンだと輪が無いとアイコンの縁が締まらないため、ユーザーの希望で#282828より一段明るいbg-1にしている。
+  // Gruvboxライトでは問題になっていないので、ダークに限る。
+  // documentのスタイルはShadow DOMの中に届かないため、ShadowRootごとにこのシートを追加する。
+  const chatSheet = new CSSStyleSheet();
+  chatSheet.replaceSync("@media (prefers-color-scheme: dark) { .bg-btn-primary .bg-fg-alpha-100 { background-color: var(--xgb-r-bg-1); } }");
+
+  // Xが後からadoptedStyleSheetsを代入し直すと自前のシートが外れるため、再走査のたびに付け直す。
+  function adoptChatSheet(shadow) {
+    if (!shadow.adoptedStyleSheets.includes(chatSheet)) shadow.adoptedStyleSheets = [...shadow.adoptedStyleSheets, chatSheet];
+  }
+
   function rescanSheets() {
     rescanScheduled = false;
     const sheets = [...document.styleSheets, ...document.adoptedStyleSheets];
@@ -480,6 +497,7 @@
         shadowRoots.delete(shadow);
         continue;
       }
+      adoptChatSheet(shadow);
       sheets.push(...shadow.styleSheets, ...shadow.adoptedStyleSheets);
     }
     for (const sheet of sheets) {

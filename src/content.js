@@ -117,7 +117,9 @@
   // この重ね合わせにはdata-testidもroleも無いため、「警告アイコンのsvg・見出し・説明文が並ぶdivと、表示ボタンを持つ要素」という構造で特定している。
   const SENSITIVE_WARNING_SELECTOR =
     "div:has(> div:only-child > div:first-child > svg:first-child + div + div:last-child):has(> div:only-child > button:last-child)";
-  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], [data-testid="attachments"] button:not(:has([data-testid="User-Name"])), ${SENSITIVE_WARNING_SELECTOR})`;
+  // 複数画像のポストで画像の上に出る左右移動ボタン(ScrollSnap)も、#0f1419の75%の丸に白い矢印を載せており、同じ理由で丸と矢印が同じ暗い色になる。
+  const SCROLL_SNAP_BUTTON_SELECTOR = '[data-testid="ScrollSnap-prevButtonWrapper"], [data-testid="ScrollSnap-nextButtonWrapper"]';
+  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], ${SCROLL_SNAP_BUTTON_SELECTOR}, [data-testid="attachments"] button:not(:has([data-testid="User-Name"])), ${SENSITIVE_WARNING_SELECTOR})`;
 
   // ボタンにホバーした時のツールチップは、表示モードによらず濃い灰色(#464646の90%)の下地に白い文字を載せている。
   // ダーク系モードでは#ffffffを背景色に割り当てる(OVERRIDES参照)ため、下地がbg-2、文字がbgの暗い色同士になって読めなくなる。

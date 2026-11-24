@@ -393,7 +393,9 @@
   const CHAT_ON_COLOR_TOKENS = new Set(["--x-fg-on-color"]);
 
   function rewriteChatTokens(rule) {
-    const { style, selectorText } = rule;
+    const { style } = rule;
+    // Grokの画面ではトークンがネストしたCSSの中にあり、宣言部分がセレクタを持たないCSSNestedDeclarationsになるため、親ルールのセレクタで判定する。
+    const selectorText = rule.selectorText ?? rule.parentRule?.selectorText;
     if (!selectorText) return;
     const isDark = selectorText.includes(CHAT_DARK_SELECTOR);
     const updates = [];

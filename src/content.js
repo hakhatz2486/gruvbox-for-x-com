@@ -124,6 +124,17 @@
   // 下地は灰色としてテーマ色に置き換わっており画像の上でもないので、元の色には戻さず、文字だけを本文色に割り当て直す。
   const TOOLTIP_SELECTOR = '[role="tooltip"]';
 
+  // ニュースのポストに付くカード(Jetfuelという別系統のUIで描かれる)は、画像の上に黒から透明へのグラデーションを重ね、白い文字で見出しや日時を載せている。
+  // ダーク系モードでは黒も白も背景色に割り当てるため文字が読めなくなるが、グラデーションはカードの下端でページの背景に溶け込ませる作りなので、元の色に戻すより背景色のまま残し、白だけを本文色に割り当て直す。
+  // Jetfuelのクラス名はビルドごとに変わるが、grid-rows-1やrow-start-1のようなTailwind由来の名前は残っているため、「1マスのグリッドに重ねた2枚目以降の層」として画像の上の層を特定している。
+  const JETFUEL_MEDIA_OVERLAY_SELECTOR = ".jetfuel-style-root .grid-rows-1 > .row-start-1 + .row-start-1";
+  const WHITE_AS_FG_SELECTOR = `:is(${TOOLTIP_SELECTOR}, ${JETFUEL_MEDIA_OVERLAY_SELECTOR})`;
+
+  // 同じカードでは、正方形の画像が見出しの帯の下まで敷かれたまま、角丸(24px)の枠で切り抜かれている。
+  // 角の曲線では画像と帯が別々に半透明で縁取られるため、帯の下の画像が透けて、白い画像なら角が白く、黒い画像なら枠線が暗く欠けて見える。
+  // 画像の層だけ下の角を枠より大きく丸め、下端も1px削ることで、曲線の縁に画像が来ないようにしている。
+  const JETFUEL_MEDIA_LAYER_SELECTOR = ".jetfuel-style-root .grid-rows-1 > .row-start-1:has(+ .row-start-1)";
+
   const STORAGE_KEY = "xgb-source";
 
   const root = document.documentElement;
@@ -190,7 +201,8 @@
   const notificationMarkRule = ownSheet.cssRules[ownSheet.insertRule(`${NOTIFICATION_MARK_SELECTOR} {}`, ownSheet.cssRules.length)];
   const onMediaRule = ownSheet.cssRules[ownSheet.insertRule(`${ON_MEDIA_SELECTOR} {}`, ownSheet.cssRules.length)];
   const whiteAsBgSources = Object.keys(OVERRIDES.ffffff).map((name) => `[data-xgb-source="${name}"]`);
-  ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${TOOLTIP_SELECTOR} { --xgb-c-ffffff: var(--xgb-r-fg); }`, ownSheet.cssRules.length);
+  ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${WHITE_AS_FG_SELECTOR} { --xgb-c-ffffff: var(--xgb-r-fg); }`, ownSheet.cssRules.length);
+  ownSheet.insertRule(`${JETFUEL_MEDIA_LAYER_SELECTOR} { clip-path: inset(0 0 1px 0 round 0 0 26px 26px); }`, ownSheet.cssRules.length);
   const defined = new Set();
 
   function analyze([r, g, b]) {
@@ -327,12 +339,44 @@
     return `var(--xgb-h-${hex}, ${value.trim()})`;
   }
 
+  // var()を含む値をショートハンドで書くと(例: Jetfuelのカード枠のborder-color: rgba(39, 39, 42, var(--jbo)))、style[i]で列挙される個別のプロパティの値が空文字になり、色が書き換えられずに残る。
+  // その場合に限り、色を含みうるショートハンドの値を読んで書き換える。
+  const COLOR_SHORTHANDS = [
+    "border",
+    "border-color",
+    "border-top",
+    "border-right",
+    "border-bottom",
+    "border-left",
+    "border-block",
+    "border-block-color",
+    "border-block-start",
+    "border-block-end",
+    "border-inline",
+    "border-inline-color",
+    "border-inline-start",
+    "border-inline-end",
+    "outline",
+    "background",
+    "text-decoration",
+    "column-rule",
+    "text-emphasis",
+    "-webkit-text-stroke",
+  ];
+
   function rewriteDeclaration(style) {
+    let hasPendingShorthand = false;
     for (let i = 0; i < style.length; i++) {
       const property = style[i];
       const value = style.getPropertyValue(property);
+      if (!value) hasPendingShorthand = true;
       const next = (property.startsWith("--") && rewriteChannels(value)) || rewriteValue(value);
       if (next) style.setProperty(property, next, style.getPropertyPriority(property));
+    }
+    if (!hasPendingShorthand) return;
+    for (const shorthand of COLOR_SHORTHANDS) {
+      const next = rewriteValue(style.getPropertyValue(shorthand));
+      if (next) style.setProperty(shorthand, next, style.getPropertyPriority(shorthand));
     }
   }
 

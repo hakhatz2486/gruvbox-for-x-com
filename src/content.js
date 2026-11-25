@@ -131,6 +131,10 @@
   // Jetfuelのクラス名はビルドごとに変わるが、grid-rows-1やrow-start-1のようなTailwind由来の名前は残っているため、「1マスのグリッドに重ねた2枚目以降の層」として画像の上の層を特定している。
   const JETFUEL_MEDIA_OVERLAY_SELECTOR = ".jetfuel-style-root .grid-rows-1 > .row-start-1 + .row-start-1";
   const WHITE_AS_FG_SELECTOR = `:is(${TOOLTIP_SELECTOR}, ${JETFUEL_MEDIA_OVERLAY_SELECTOR})`;
+  // 逆にデフォルトモードでは、黒いグラデーションが本文色、白い文字が背景色になり、カードの帯だけ明暗が反転した見た目になる。
+  // その帯の上にある分類名(「Gaming」等)の灰色#71717aは、明度だけで判定すると補助文字色になり、帯と同じ側の色同士でコントラストが2:1前後しかなくなる。
+  // 反転した帯の上の補助文字には、背景と反対側にあるbg-3(ライトでは#bdae93、ダークでは#665c54)を割り当てる。
+  const JETFUEL_OVERLAY_MUTED_HEX = "71717a";
 
   // 同じカードでは、正方形の画像が見出しの帯の下まで敷かれたまま、角丸(24px)の枠で切り抜かれている。
   // 角の曲線では画像と帯が別々に半透明で縁取られるため、帯の下の画像が透けて、白い画像なら角が白く、黒い画像なら枠線が暗く欠けて見える。
@@ -204,6 +208,7 @@
   const onMediaRule = ownSheet.cssRules[ownSheet.insertRule(`${ON_MEDIA_SELECTOR} {}`, ownSheet.cssRules.length)];
   const whiteAsBgSources = Object.keys(OVERRIDES.ffffff).map((name) => `[data-xgb-source="${name}"]`);
   ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${WHITE_AS_FG_SELECTOR} { --xgb-c-ffffff: var(--xgb-r-fg); }`, ownSheet.cssRules.length);
+  ownSheet.insertRule(`html[data-xgb-source="light"] ${JETFUEL_MEDIA_OVERLAY_SELECTOR} { --xgb-c-${JETFUEL_OVERLAY_MUTED_HEX}: var(--xgb-r-bg-3); }`, ownSheet.cssRules.length);
   ownSheet.insertRule(`${JETFUEL_MEDIA_LAYER_SELECTOR} { clip-path: inset(0 0 1px 0 round 0 0 26px 26px); }`, ownSheet.cssRules.length);
   const defined = new Set();
 

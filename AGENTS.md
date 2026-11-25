@@ -20,6 +20,7 @@ x.comの配色をGruvbox Light/Dark Mediumに置き換えるChrome拡張。ユ�
 - 動画プレイヤー、複数画像の左右移動ボタン、投稿画面の添付画像の上の「編集」「削除」ボタン、センシティブな内容の警告(`ON_MEDIA_SELECTOR`)の中は、無彩色も含めてすべてXの元の色に戻している。画像・動画の上に重なるため、テーマ色にすると白い文字やアイコンが暗くなって見えなくなる。画像・動画の上に重なる要素で同じ問題が見つかったら、このセレクタに追加する。投稿画面の引用元カードも添付欄の中のbuttonなので、`User-Name`を含むbuttonとして除外している。
 - ツールチップ(`TOOLTIP_SELECTOR`)は、ダーク系モードに限り`#ffffff`を本文色に割り当て直している。濃い灰色の下地に白い文字を載せているが、`OVERRIDES`で白が背景色になり読めなくなるため。
 - ニュースのポストのカード(Jetfuel)の画像に重なる層(`JETFUEL_MEDIA_OVERLAY_SELECTOR`)も、ツールチップと同じく白を本文色に割り当て直している。グラデーションはページの背景に溶け込ませる作りなので、`ON_MEDIA_SELECTOR`のように元の色には戻さない。デフォルトモードでは逆に帯が本文色になって明暗が反転するため、帯の上の分類名の灰色(`JETFUEL_OVERLAY_MUTED_HEX`)を`bg-3`に割り当て直している。カードの下の角に画像が透ける問題は、画像の層(`JETFUEL_MEDIA_LAYER_SELECTOR`)を`clip-path`で枠より大きく丸めて避けている。クリエイタースタジオなどJetfuelの画面全般では、`[data-theme="dark"] .jetfuel-style-root`で始まるルールに限り白を本文色に差し替えている(`rewriteChatTokens`)。
+- ログアウト時のx.comはx-webという別のアプリで、配色のCSSを`abs.twimg.com`から`crossorigin`なしで読み込むため`cssRules`を読めない。`CORS_SHEET_SELECTOR`に一致するlink要素は`crossorigin="anonymous"`付きの複製に差し替えて書き換える(`reloadSheetWithCors`)。表示モードは`html[data-theme]`(light/dark)で判定する。x-webのReact 19はhtml要素の属性をすべて消すので、消された`data-xgb-source`をMutationObserverで付け直している。ログアウト状態はユーザーにしか再現できないため、検証はユーザーに依頼する。
 - `var()`を含む値をショートハンドで書いたルールは、個別プロパティの値が空文字で返るため、`COLOR_SHORTHANDS`のショートハンドを読んで書き換えている。
 - チャットで共有する画面の送信ボタンでアイコンを囲む輪は、Gruvboxダークに限りユーザーの希望で`bg-1`(#3c3836)にしている。チャットはShadow DOMの中にあり`#xgb-theme`が届かないため、`chatSheet`を各ShadowRootの`adoptedStyleSheets`に追加している。
 - 右サイドバーのパネルを一段濃い色で塗る変更は、試した上でユーザーが差し戻した。再提案しない。

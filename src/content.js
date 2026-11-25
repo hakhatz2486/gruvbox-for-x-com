@@ -96,6 +96,14 @@
 
   // bodyの背景色から表示モードを判定する(Xは表示モードを本体のbody要素のインラインstyleに反映する)。
   const SOURCE_BY_BODY_BG = { ffffff: "light", "15202b": "dim", "000000": "dark" };
+  // ログアウト時のx.comはx-webという別のアプリで描かれ、表示モードをbodyではなくhtml要素のdata-theme(OSの設定かnight_mode Cookieで決まるlight/dark)で切り替える。
+  // x-webのダークは黒背景なので、ブラックモードとして扱う。
+  const SOURCE_BY_HTML_THEME = { light: "light", dark: "dark" };
+
+  // x-webは配色のスタイルシートをabs.twimg.comからcrossorigin属性なしで読み込むため、別オリジン扱いになってcssRulesを読めず、色を書き換えられない。
+  // このホストはAccess-Control-Allow-Origin: *を返すので、crossorigin="anonymous"を付けた複製を読み込ませて書き換える(reloadSheetWithCors)。
+  // Access-Control-Allow-Originを返さないホスト(Googleログインボタンのaccounts.google.com等)の複製は読み込み自体が失敗するため、ホストを限定している。
+  const CORS_SHEET_SELECTOR = 'link[rel~="stylesheet"][href^="https://abs.twimg.com/"]:not([crossorigin])';
 
   // いいね・リポスト・ブックマークは押したかどうかがXのピンク・緑・青で一目で分かることを優先し、ボタン内の有彩色だけ元の色に戻す。
   // 押す前後でdata-testidが切り替わる(like→unlike、retweet→unretweet、bookmark→removeBookmark)ため両方を指定する。
@@ -461,8 +469,10 @@
 
   function detectSource(backgroundColor) {
     const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(backgroundColor);
-    if (!match) return;
-    const detected = SOURCE_BY_BODY_BG[toHex(match.slice(1, 4).map(Number))];
+    if (match) setSource(SOURCE_BY_BODY_BG[toHex(match.slice(1, 4).map(Number))]);
+  }
+
+  function setSource(detected) {
     if (!detected || detected === source) return;
     source = detected;
     root.dataset.xgbSource = source;
@@ -505,13 +515,38 @@
     }
   }
 
+  // 元のlink要素に属性を後付けする方法は、属性の変更で再取得されるかがブラウザの実装次第なので採らない。
+  // 複製の読み込みが終わるまで元の要素を残すのは、その間に配色の無い画面が出ないようにするため。
+  // 複製が読み込めなかった場合は複製だけを外し、Xの元の色のまま表示させる。
+  // パース中はhead要素の追加とその中のlink要素の追加が別々に通知され、同じlink要素が2回渡りうるため、処理済みの要素を覚えておく。
+  const corsReloaded = new WeakSet();
+
+  function reloadSheetWithCors(link) {
+    if (corsReloaded.has(link)) return;
+    corsReloaded.add(link);
+    const copy = link.cloneNode();
+    copy.crossOrigin = "anonymous";
+    copy.addEventListener(
+      "load",
+      () => {
+        rewriteSheet(copy.sheet);
+        link.remove();
+      },
+      { once: true },
+    );
+    copy.addEventListener("error", () => copy.remove(), { once: true });
+    link.after(copy);
+  }
+
   // nodeにはShadowRootも渡るが、ShadowRootは属性を持たないのでrewriteElementに渡さない。
   function rewriteTree(node) {
     if (node.nodeName === "STYLE") rewriteSheet(node.sheet);
     if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.matches(CORS_SHEET_SELECTOR)) reloadSheetWithCors(node);
       rewriteElement(node);
       rewriteSvgAttributes(node);
     }
+    for (const link of node.querySelectorAll(CORS_SHEET_SELECTOR)) reloadSheetWithCors(link);
     for (const element of node.querySelectorAll("[style]")) rewriteElement(element);
     for (const element of node.querySelectorAll(SVG_COLOR_SELECTOR)) rewriteSvgAttributes(element);
     for (const style of node.querySelectorAll("style")) rewriteSheet(style.sheet);
@@ -588,7 +623,7 @@
     subtree: true,
     childList: true,
     attributes: true,
-    attributeFilter: ["style", ...SVG_COLOR_ATTRIBUTES],
+    attributeFilter: ["style", "data-theme", "data-xgb-source", ...SVG_COLOR_ATTRIBUTES],
   };
 
   const observer = new MutationObserver((records) => {
@@ -597,7 +632,14 @@
       const recordRoot = record.target.getRootNode();
       if (recordRoot instanceof ShadowRoot) shadowRoots.add(recordRoot);
       if (record.type === "attributes") {
-        if (record.attributeName === "style") rewriteElement(record.target);
+        // チャットやJetfuelの内側の要素もdata-themeを持つが、表示モードを表すのはhtml要素のものだけである。
+        if (record.attributeName === "data-theme") {
+          if (record.target === root) setSource(SOURCE_BY_HTML_THEME[root.dataset.theme]);
+        } else if (record.attributeName === "data-xgb-source") {
+          // x-webのReact(19)はhtml要素を引き継ぐ時に属性をすべて消すため、data-xgb-sourceも消えて変数の定義が当たらなくなり、描画の数フレーム後にXの元の色へ戻ってしまう。
+          // 通知は消された直後の描画前に届くので、ここで付け直せば元の色は画面に出ない。
+          if (record.target === root && root.dataset.xgbSource !== source) root.dataset.xgbSource = source;
+        } else if (record.attributeName === "style") rewriteElement(record.target);
         else rewriteSvgAttributes(record.target);
         continue;
       }
@@ -635,6 +677,7 @@
     if (element.shadowRoot) watchShadowRoot(element.shadowRoot);
   }
 
+  setSource(SOURCE_BY_HTML_THEME[root.dataset.theme]);
   rescanSheets();
   rewriteTree(root);
 })();

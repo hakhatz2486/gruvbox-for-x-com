@@ -127,12 +127,21 @@
     "div:has(> div:only-child > div:first-child > svg:first-child + div + div:last-child):has(> div:only-child > button:last-child)";
   // 複数画像のポストで画像の上に出る左右移動ボタン(ScrollSnap)も、#0f1419の75%の丸に白い矢印を載せており、同じ理由で丸と矢印が同じ暗い色になる。
   const SCROLL_SNAP_BUTTON_SELECTOR = '[data-testid="ScrollSnap-prevButtonWrapper"], [data-testid="ScrollSnap-nextButtonWrapper"]';
-  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], ${SCROLL_SNAP_BUTTON_SELECTOR}, [data-testid="attachments"] button:not(:has([data-testid="User-Name"])), ${SENSITIVE_WARNING_SELECTOR})`;
+  // リンクの大きいカードは、画像の左下に黒77%の下地を重ねて白い文字でページのタイトルを載せており、同じ理由で下地と文字が同じ暗い色になる。
+  // この下地にはdata-testidが無いが、card.layoutLarge.mediaの中には画像とこの下地しか無く枠線も無いため、カードの画像部分ごと元の色に戻す。
+  const LINK_CARD_MEDIA_SELECTOR = '[data-testid="card.layoutLarge.media"]';
+  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], ${SCROLL_SNAP_BUTTON_SELECTOR}, ${LINK_CARD_MEDIA_SELECTOR}, [data-testid="attachments"] button:not(:has([data-testid="User-Name"])), ${SENSITIVE_WARNING_SELECTOR})`;
 
   // ボタンにホバーした時のツールチップは、表示モードによらず濃い灰色(#464646の90%)の下地に白い文字を載せている。
   // ダーク系モードでは#ffffffを背景色に割り当てる(OVERRIDES参照)ため、下地がbg-2、文字がbgの暗い色同士になって読めなくなる。
   // 下地は灰色としてテーマ色に置き換わっており画像の上でもないので、元の色には戻さず、文字だけを本文色に割り当て直す。
   const TOOLTIP_SELECTOR = '[role="tooltip"]';
+
+  // ポストをチャットで共有した時などに画面下に出るトースト(sonner)は、表示モードによらず#222222の60%の下地に--x-fg-on-color(白)の文字を載せ、ボタンと説明文は--x-white-NNで描いている。
+  // ダーク系モードでは下地も白も暗い色になるが、これらのトークンは:rootで色が確定してから継承されるため、ツールチップのように--xgb-c-ffffffを差し替えても効かない。
+  // そのためトースト自身でトークンを定義し直す。使われている透明度は、ボタンの15%(ホバー時)と20%、説明文の80%だけである。
+  const TOAST_SELECTOR = "[data-sonner-toast]";
+  const TOAST_WHITE_ALPHAS = [15, 20, 80];
 
   // ニュースのポストに付くカード(Jetfuelという別系統のUIで描かれる)は、画像の上に黒から透明へのグラデーションを重ね、白い文字で見出しや日時を載せている。
   // ダーク系モードでは黒も白も背景色に割り当てるため文字が読めなくなるが、グラデーションはカードの下端でページの背景に溶け込ませる作りなので、元の色に戻すより背景色のまま残し、白だけを本文色に割り当て直す。
@@ -216,6 +225,8 @@
   const onMediaRule = ownSheet.cssRules[ownSheet.insertRule(`${ON_MEDIA_SELECTOR} {}`, ownSheet.cssRules.length)];
   const whiteAsBgSources = Object.keys(OVERRIDES.ffffff).map((name) => `[data-xgb-source="${name}"]`);
   ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${WHITE_AS_FG_SELECTOR} { --xgb-c-ffffff: var(--xgb-r-fg); }`, ownSheet.cssRules.length);
+  const toastWhiteDecls = TOAST_WHITE_ALPHAS.map((alpha) => `--x-white-${alpha}: color-mix(in srgb, var(--xgb-r-fg) ${alpha}%, transparent);`).join(" ");
+  ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${TOAST_SELECTOR} { --x-fg-on-color: var(--xgb-r-fg); ${toastWhiteDecls} }`, ownSheet.cssRules.length);
   ownSheet.insertRule(`html[data-xgb-source="light"] ${JETFUEL_MEDIA_OVERLAY_SELECTOR} { --xgb-c-${JETFUEL_OVERLAY_MUTED_HEX}: var(--xgb-r-bg-3); }`, ownSheet.cssRules.length);
   ownSheet.insertRule(`${JETFUEL_MEDIA_LAYER_SELECTOR} { clip-path: inset(0 0 1px 0 round 0 0 26px 26px); }`, ownSheet.cssRules.length);
   const defined = new Set();

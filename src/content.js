@@ -7,7 +7,7 @@
   "use strict";
 
   // 値はhakhatz.devのstyle.cssと同じGruvbox Mediumの色。
-  // 背景はlight0/dark0、本文はdark0/light0、リンク色はfaded-blue/bright-blue、ホバー色はfaded-purple/bright-purpleで、サイトと揃えている。
+  // 背景はlight0/dark0、本文はdark0/light0、リンク色はfaded-blue/bright-blueで、サイトと揃えている。
   const ROLES = {
     light: {
       bg: "#fbf1c7",
@@ -19,7 +19,10 @@
       // dark4(#7c6f64)はlight0上で4.29:1しかなくWCAG AAの4.5:1に届かないため、補助文字にはdark3を使う。
       "fg-muted": "#665c54",
       blue: "#076678",
-      "blue-hover": "#8f3f71",
+      // Xがホバー色(#1a8cd8)を使うのは、新着ポストのボタンなど青いボタンのホバー時の背景である。
+      // hakhatz.devのリンクのホバー色(faded-purple)を当てると、ボタンが青から紫に大きく変わって浮くため、青を本文色側に15%寄せた色にする。
+      // ボタン上の文字は背景色なので、本文色側に寄せればコントラストは下がらない(ライト6.6:1、ダーク6.3:1)。
+      "blue-hover": "color-mix(in srgb, #076678 85%, #282828)",
       red: "#9d0006",
       // faded-green/faded-aquaはlight0上で4.29:1/4.40:1とわずかにAAに届かないため、dark0を5%だけ混ぜて4.5:1を超えさせる。
       green: "color-mix(in srgb, #79740e 95%, #282828)",
@@ -39,7 +42,7 @@
       // light4(#a89984)はdark1上で4.17:1になるため、一段明るいlight3を使う。
       "fg-muted": "#bdae93",
       blue: "#83a598",
-      "blue-hover": "#d3869b",
+      "blue-hover": "color-mix(in srgb, #83a598 85%, #fbf1c7)",
       // bright-redはdark0上で4.29:1とAAに届かないため、light0を10%混ぜる。
       red: "color-mix(in srgb, #fb4934 90%, #fbf1c7)",
       green: "#b8bb26",

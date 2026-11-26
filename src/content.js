@@ -162,7 +162,14 @@
   // ダーク系モードでは黒も白も背景色に割り当てるため文字が読めなくなるが、グラデーションはカードの下端でページの背景に溶け込ませる作りなので、元の色に戻すより背景色のまま残し、白だけを本文色に割り当て直す。
   // Jetfuelのクラス名はビルドごとに変わるが、grid-rows-1やrow-start-1のようなTailwind由来の名前は残っているため、「1マスのグリッドに重ねた2枚目以降の層」として画像の上の層を特定している。
   const JETFUEL_MEDIA_OVERLAY_SELECTOR = ".jetfuel-style-root .grid-rows-1 > .row-start-1 + .row-start-1";
-  const WHITE_AS_FG_SELECTOR = `:is(${TOOLTIP_SELECTOR}, ${GROK_BOT_OFFER_SELECTOR}, ${JETFUEL_MEDIA_OVERLAY_SELECTOR})`;
+
+  // プレミアムビジネスの紹介ページ(x.com/i/premium-business)は、表示モードによらず黒い下地に白い文字と白いボタンを載せる作りで、Tailwindのtext-white/bg-white(--x-white)と、React Native Webのボタンのインラインstyleの#ffffffを使っている。
+  // ダーク系モードでは白を背景色に割り当てるため、見出しやボタンが下地と同じ色になって見えなくなる。
+  // チャットと違い白を有彩色の上の文字に使う箇所が無いので、ページ全体で白を本文色に割り当て直す。
+  // --x-whiteと--x-white-NNは:rootで色が確定してから継承されるため、--xgb-c-ffffffの差し替えだけでは効かず、トークン自体もページの根元で定義し直す(rewriteChatTokens)。
+  // ページの根元にはdata-testidが無く、他の画面でdata-themeを持つのはhtml要素とReact Native Webの要素だけなので、data-themeとTailwindのtext-primaryを併せ持つ要素として特定している。
+  const COMMERCE_PAGE_SELECTOR = '[data-theme="dark"].text-primary';
+  const WHITE_AS_FG_SELECTOR = `:is(${TOOLTIP_SELECTOR}, ${GROK_BOT_OFFER_SELECTOR}, ${JETFUEL_MEDIA_OVERLAY_SELECTOR}, ${COMMERCE_PAGE_SELECTOR})`;
   // 逆にデフォルトモードでは、黒いグラデーションが本文色、白い文字が背景色になり、カードの帯だけ明暗が反転した見た目になる。
   // その帯の上にある分類名(「Gaming」等)の灰色#71717aは、明度だけで判定すると補助文字色になり、帯と同じ側の色同士でコントラストが2:1前後しかなくなる。
   // 反転した帯の上の補助文字には、背景と反対側にあるbg-3(ライトでは#bdae93、ダークでは#665c54)を割り当てる。
@@ -240,6 +247,8 @@
   const onMediaRule = ownSheet.cssRules[ownSheet.insertRule(`${ON_MEDIA_SELECTOR} {}`, ownSheet.cssRules.length)];
   const whiteAsBgSources = Object.keys(OVERRIDES.ffffff).map((name) => `[data-xgb-source="${name}"]`);
   ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${WHITE_AS_FG_SELECTOR} { --xgb-c-ffffff: var(--xgb-r-fg); }`, ownSheet.cssRules.length);
+  // 中身はXの--x-white(-NN)の定義を見つけるたびにrewriteChatTokensが足す。
+  const commerceWhiteRule = ownSheet.cssRules[ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${COMMERCE_PAGE_SELECTOR} {}`, ownSheet.cssRules.length)];
   ownSheet.insertRule(`html[data-xgb-source="light"] ${JETFUEL_MEDIA_OVERLAY_SELECTOR} { --xgb-c-${JETFUEL_OVERLAY_MUTED_HEX}: var(--xgb-r-bg-3); }`, ownSheet.cssRules.length);
   ownSheet.insertRule(`${JETFUEL_MEDIA_LAYER_SELECTOR} { clip-path: inset(0 0 1px 0 round 0 0 26px 26px); }`, ownSheet.cssRules.length);
   const defined = new Set();
@@ -453,6 +462,7 @@
         const next = value.replaceAll(CHAT_WHITE_LITERAL, "var(--xgb-r-fg)");
         const name = `--xgb-fg-white${def[1] ?? ""}`;
         if (next !== value && style.getPropertyValue(name) !== next) updates.push([name, next]);
+        if (next !== value) commerceWhiteRule.style.setProperty(property, `var(${name})`);
         continue;
       }
       if (isJetfuelDark && !property.startsWith("--x-")) {

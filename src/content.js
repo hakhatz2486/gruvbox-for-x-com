@@ -142,6 +142,11 @@
   // 下地は灰色としてテーマ色に置き換わっており画像の上でもないので、元の色には戻さず、文字だけを本文色に割り当て直す。
   const TOOLTIP_SELECTOR = '[role="tooltip"]';
 
+  // 右サイドバーのGrok Botの宣伝カード(「Get Grok Bot with X Premium」)は、表示モードによらず黒い下地(#000000)に白い文字と白い枠線、白い顔に黒い目のGrokのマークを載せている。
+  // ダーク系モードでは黒も白も背景色になって文字とマークが消えるため、ツールチップと同じく白だけを本文色に割り当て直す。
+  // カード自体にはdata-testidが無いため、閉じるボタン(grokBotOfferDismiss)を含むaside要素として特定している。
+  const GROK_BOT_OFFER_SELECTOR = 'aside:has([data-testid="grokBotOfferDismiss"])';
+
   // ポストをチャットで共有した時などに画面下に出るトースト(sonner)は、表示モードによらず#222222の60%の下地に--x-fg-on-color(白)の文字を載せ、ボタンと説明文は--x-white-NNで描いている。
   // ダーク系モードでは下地も白も暗い色になるが、これらのトークンは:rootで色が確定してから継承されるため、ツールチップのように--xgb-c-ffffffを差し替えても効かない。
   // そのためトースト自身でトークンを定義し直す。使われている透明度は、ボタンの15%(ホバー時)と20%、説明文の80%だけである。
@@ -152,7 +157,7 @@
   // ダーク系モードでは黒も白も背景色に割り当てるため文字が読めなくなるが、グラデーションはカードの下端でページの背景に溶け込ませる作りなので、元の色に戻すより背景色のまま残し、白だけを本文色に割り当て直す。
   // Jetfuelのクラス名はビルドごとに変わるが、grid-rows-1やrow-start-1のようなTailwind由来の名前は残っているため、「1マスのグリッドに重ねた2枚目以降の層」として画像の上の層を特定している。
   const JETFUEL_MEDIA_OVERLAY_SELECTOR = ".jetfuel-style-root .grid-rows-1 > .row-start-1 + .row-start-1";
-  const WHITE_AS_FG_SELECTOR = `:is(${TOOLTIP_SELECTOR}, ${JETFUEL_MEDIA_OVERLAY_SELECTOR})`;
+  const WHITE_AS_FG_SELECTOR = `:is(${TOOLTIP_SELECTOR}, ${GROK_BOT_OFFER_SELECTOR}, ${JETFUEL_MEDIA_OVERLAY_SELECTOR})`;
   // 逆にデフォルトモードでは、黒いグラデーションが本文色、白い文字が背景色になり、カードの帯だけ明暗が反転した見た目になる。
   // その帯の上にある分類名(「Gaming」等)の灰色#71717aは、明度だけで判定すると補助文字色になり、帯と同じ側の色同士でコントラストが2:1前後しかなくなる。
   // 反転した帯の上の補助文字には、背景と反対側にあるbg-3(ライトでは#bdae93、ダークでは#665c54)を割り当てる。

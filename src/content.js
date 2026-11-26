@@ -130,7 +130,12 @@
   // リンクの大きいカードは、画像の左下に黒77%の下地を重ねて白い文字でページのタイトルを載せており、同じ理由で下地と文字が同じ暗い色になる。
   // この下地にはdata-testidが無いが、card.layoutLarge.mediaの中には画像とこの下地しか無く枠線も無いため、カードの画像部分ごと元の色に戻す。
   const LINK_CARD_MEDIA_SELECTOR = '[data-testid="card.layoutLarge.media"]';
-  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], ${SCROLL_SNAP_BUTTON_SELECTOR}, ${LINK_CARD_MEDIA_SELECTOR}, [data-testid="attachments"] button:not(:has([data-testid="User-Name"])), ${SENSITIVE_WARNING_SELECTOR})`;
+  // プロフィール編集画面のバナーとアイコンの上の「画像を追加」ボタンも、#0f1419の75%の丸に白いカメラのアイコンを載せており、同じ理由で丸とアイコンが同じ暗い色になる。
+  // このボタンにはdata-testidが無く、aria-labelは表示言語で変わるため、ファイル選択のinput(fileInput)の直前にあるbuttonという構造で特定する。
+  // 投稿欄の画像追加のfileInputは直前にbuttonを持たないので一致しない。
+  // 画像を設定済みの時に並ぶ「削除」ボタンも同じ層に置かれると考え、ボタン単体ではなく画像の上に重なる層全体を対象にしている(削除ボタンは未確認)。
+  const PROFILE_IMAGE_BUTTONS_SELECTOR = 'div:has(> div > button + [data-testid="fileInput"])';
+  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], ${SCROLL_SNAP_BUTTON_SELECTOR}, ${LINK_CARD_MEDIA_SELECTOR}, [data-testid="attachments"] button:not(:has([data-testid="User-Name"])), ${SENSITIVE_WARNING_SELECTOR}, ${PROFILE_IMAGE_BUTTONS_SELECTOR})`;
 
   // ボタンにホバーした時のツールチップは、表示モードによらず濃い灰色(#464646の90%)の下地に白い文字を載せている。
   // ダーク系モードでは#ffffffを背景色に割り当てる(OVERRIDES参照)ため、下地がbg-2、文字がbgの暗い色同士になって読めなくなる。

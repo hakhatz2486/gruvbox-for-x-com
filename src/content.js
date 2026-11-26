@@ -150,8 +150,10 @@
   // ポストをチャットで共有した時などに画面下に出るトースト(sonner)は、表示モードによらず#222222の60%の下地に--x-fg-on-color(白)の文字を載せ、ボタンと説明文は--x-white-NNで描いている。
   // ダーク系モードでは下地も白も暗い色になるが、これらのトークンは:rootで色が確定してから継承されるため、ツールチップのように--xgb-c-ffffffを差し替えても効かない。
   // そのためトースト自身でトークンを定義し直す。使われている透明度は、ボタンの15%(ホバー時)と20%、説明文の80%だけである。
+  // トーストを表示するToasterはチャットのShadow DOMの中にあり、documentのスタイルもhtml[data-xgb-source]での判定も届かないため、このルールはchatSheetに置き、ダーク系モードかどうかはチャット側のdata-theme="dark"で判定する。
   const TOAST_SELECTOR = "[data-sonner-toast]";
   const TOAST_WHITE_ALPHAS = [15, 20, 80];
+  const toastWhiteDecls = TOAST_WHITE_ALPHAS.map((alpha) => `--x-white-${alpha}: color-mix(in srgb, var(--xgb-r-fg) ${alpha}%, transparent);`).join(" ");
 
   // ニュースのポストに付くカード(Jetfuelという別系統のUIで描かれる)は、画像の上に黒から透明へのグラデーションを重ね、白い文字で見出しや日時を載せている。
   // ダーク系モードでは黒も白も背景色に割り当てるため文字が読めなくなるが、グラデーションはカードの下端でページの背景に溶け込ませる作りなので、元の色に戻すより背景色のまま残し、白だけを本文色に割り当て直す。
@@ -235,8 +237,6 @@
   const onMediaRule = ownSheet.cssRules[ownSheet.insertRule(`${ON_MEDIA_SELECTOR} {}`, ownSheet.cssRules.length)];
   const whiteAsBgSources = Object.keys(OVERRIDES.ffffff).map((name) => `[data-xgb-source="${name}"]`);
   ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${WHITE_AS_FG_SELECTOR} { --xgb-c-ffffff: var(--xgb-r-fg); }`, ownSheet.cssRules.length);
-  const toastWhiteDecls = TOAST_WHITE_ALPHAS.map((alpha) => `--x-white-${alpha}: color-mix(in srgb, var(--xgb-r-fg) ${alpha}%, transparent);`).join(" ");
-  ownSheet.insertRule(`html:is(${whiteAsBgSources.join(", ")}) ${TOAST_SELECTOR} { --x-fg-on-color: var(--xgb-r-fg); ${toastWhiteDecls} }`, ownSheet.cssRules.length);
   ownSheet.insertRule(`html[data-xgb-source="light"] ${JETFUEL_MEDIA_OVERLAY_SELECTOR} { --xgb-c-${JETFUEL_OVERLAY_MUTED_HEX}: var(--xgb-r-bg-3); }`, ownSheet.cssRules.length);
   ownSheet.insertRule(`${JETFUEL_MEDIA_LAYER_SELECTOR} { clip-path: inset(0 0 1px 0 round 0 0 26px 26px); }`, ownSheet.cssRules.length);
   const defined = new Set();
@@ -602,7 +602,10 @@
   // Gruvboxライトでは問題になっていないので、ダークに限る。
   // documentのスタイルはShadow DOMの中に届かないため、ShadowRootごとにこのシートを追加する。
   const chatSheet = new CSSStyleSheet();
-  chatSheet.replaceSync("@media (prefers-color-scheme: dark) { .bg-btn-primary .bg-fg-alpha-100 { background-color: var(--xgb-r-bg-1); } }");
+  chatSheet.replaceSync(
+    "@media (prefers-color-scheme: dark) { .bg-btn-primary .bg-fg-alpha-100 { background-color: var(--xgb-r-bg-1); } }\n" +
+      `${CHAT_DARK_SELECTOR} ${TOAST_SELECTOR} { --x-fg-on-color: var(--xgb-r-fg); ${toastWhiteDecls} }`,
+  );
 
   // Xが後からadoptedStyleSheetsを代入し直すと自前のシートが外れるため、再走査のたびに付け直す。
   function adoptChatSheet(shadow) {

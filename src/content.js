@@ -138,7 +138,12 @@
   // 投稿欄の画像追加のfileInputは直前にbuttonを持たないので一致しない。
   // 画像を設定済みの時に並ぶ「削除」ボタンも同じ層に置かれると考え、ボタン単体ではなく画像の上に重なる層全体を対象にしている(削除ボタンは未確認)。
   const PROFILE_IMAGE_BUTTONS_SELECTOR = 'div:has(> div > button + [data-testid="fileInput"])';
-  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], ${SCROLL_SNAP_BUTTON_SELECTOR}, ${LINK_CARD_MEDIA_SELECTOR}, [data-testid="attachments"] button:not(:has([data-testid="User-Name"])), ${SENSITIVE_WARNING_SELECTOR}, ${PROFILE_IMAGE_BUTTONS_SELECTOR})`;
+  // 画像をクリックして開く拡大表示では、左の画像側の領域に、表示モードによらず黒90%の下地を敷き、左右移動・閉じる・右パネル切り替えのボタン(#000000の75%の丸に白い矢印)と、白いアイコンの操作バーを載せている。
+  // ダーク系モードでは黒も白も背景色になって、ボタンの矢印や操作バーのアイコンが見えなくなる。
+  // ボタンごとに指定するとdata-testidの無い閉じるボタン等を拾えないため、画像側の領域ごと元の色に戻す。
+  // この領域自体にはdata-testidが無いため、画像(swipe-to-dismiss)を含み、右パネルのポスト(tweet)を含まない要素として特定している。
+  const PHOTO_VIEWER_MEDIA_SELECTOR = '[role="dialog"] div:has([data-testid="swipe-to-dismiss"]):not(:has([data-testid="tweet"]))';
+  const ON_MEDIA_SELECTOR = `:is([data-testid="videoPlayer"], ${SCROLL_SNAP_BUTTON_SELECTOR}, ${LINK_CARD_MEDIA_SELECTOR}, [data-testid="attachments"] button:not(:has([data-testid="User-Name"])), ${SENSITIVE_WARNING_SELECTOR}, ${PROFILE_IMAGE_BUTTONS_SELECTOR}, ${PHOTO_VIEWER_MEDIA_SELECTOR})`;
 
   // ボタンにホバーした時のツールチップは、表示モードによらず濃い灰色(#464646の90%)の下地に白い文字を載せている。
   // ダーク系モードでは#ffffffを背景色に割り当てる(OVERRIDES参照)ため、下地がbg-2、文字がbgの暗い色同士になって読めなくなる。
